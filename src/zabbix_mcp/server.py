@@ -1162,11 +1162,29 @@ def _register_tools(
 
     When *disabled_tools* is set, tools whose prefix matches an entry
     are excluded. This is applied after the allowlist filter.
+
+    Write operation tools are excluded when:
+    1. [server].read_only = true (global enforcement), OR
+    2. All [zabbix.*] servers have read_only = true
     """
     from zabbix_mcp.token_store import check_token_authorization
 
     server_names = client_manager.server_names
     count = 0
+
+    skip_write_tools = False
+    if config:
+        # Check global [server].read_only first
+        if config.server.read_only:
+            skip_write_tools = True
+        else:
+            # Check if all Zabbix servers are configured with read_only = true
+            all_zabbix_readonly = all(
+                client_manager.get_server_config(s).read_only
+                for s in server_names
+            )
+            if all_zabbix_readonly:
+                skip_write_tools = True
 
     for method_def in ALL_METHODS:
         prefix = method_def.tool_name.rsplit("_", 1)[0]
@@ -1176,6 +1194,9 @@ def _register_tools(
         if disabled_tools is not None:
             if prefix in disabled_tools:
                 continue
+        # Skip write tools if global [server].read_only is true or all Zabbix servers are configured with read_only = true
+        if skip_write_tools and not method_def.read_only:
+            continue
         handler = _make_tool_handler(
             method_def, client_manager, server_names,
             allowed_import_dirs=allowed_import_dirs,
@@ -1981,6 +2002,44 @@ def run_server(
                     _cti_var.set(None)
                     _cip_var.set(None)
             asgi_app = _client_ip_middleware
+
+            if token_store.token_count > 0:
+                try:
+                    _original_list = mcp._tool_manager.list_tools
+                    def _filtered_list_tools():
+                        """动态过滤工具列表。"""
+                        tools = _original_list()
+                        
+                        from zabbix_mcp.token_store import current_token_info
+                        token = current_token_info.get()
+                        
+                        if not token or not token.scopes or "*" in token.scopes:
+                            return tools
+                        
+                        from zabbix_mcp.config import _expand_tool_groups
+                        allowed_prefixes = set(_expand_tool_groups(token.scopes))
+                        
+                        extension_tools = {
+                            "zabbix_raw_api_call", "graph_render",
+                            "anomaly_detect", "capacity_forecast",
+                            "report_generate", "action_prepare",
+                            "action_confirm", "health_check"
+                        }
+                        
+                        filtered = []
+                        for tool in tools:
+                            if tool.name in extension_tools:
+                                if "extensions" in token.scopes or tool.name in allowed_prefixes:
+                                    filtered.append(tool)
+                            else:
+                                prefix = tool.name.rsplit("_", 1)[0] if "_" in tool.name else tool.name
+                                if prefix in allowed_prefixes:
+                                    filtered.append(tool)
+                        return filtered
+                    mcp._tool_manager.list_tools = _filtered_list_tools
+                    logger.info("Token-aware tools filtering enabled (%d tokens)", token_store.token_count)
+                except AttributeError as e:
+                    logger.error("Cannot install tools filter: %s", e)
 
             # Apply IP allowlist middleware if configured
             if config.server.allowed_hosts:

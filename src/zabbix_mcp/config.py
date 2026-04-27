@@ -66,6 +66,7 @@ class ServerConfig:
     auth_token: str | None = None
     rate_limit: int = 300
     tools: list[str] | None = None
+    read_only: bool = False
     disabled_tools: list[str] | None = None
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
@@ -295,6 +296,7 @@ def load_config(path: str | Path) -> AppConfig:
         auth_token=_resolve_env_vars(server_raw["auth_token"]) if server_raw.get("auth_token") else None,
         rate_limit=server_raw.get("rate_limit", 300),
         tools=tools_filter,
+        read_only=server_raw.get("read_only", False),
         disabled_tools=disabled_tools_filter,
         tls_cert_file=tls_cert_file,
         tls_key_file=tls_key_file,
