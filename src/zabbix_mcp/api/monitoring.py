@@ -495,6 +495,9 @@ _PROBLEM_GET = MethodDef(
         "'acknowledged' or 'suppressed' to filter by operational state. "
         "The 'recent' flag limits results to problems created in the last "
         "30 minutes."
+        "IMPORTANT: For sorting, use 'sortfield' with supported fields: "
+        "'eventid', 'objectid', or 'name'. The 'clock' field is NOT supported "
+        "for sorting. Use 'eventid' for time-based ordering (event IDs are sequential)."
     ),
     read_only=True,
     compact_fields=("eventid", "name", "severity", "clock", "r_clock"),
