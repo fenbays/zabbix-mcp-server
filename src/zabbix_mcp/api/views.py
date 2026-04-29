@@ -81,17 +81,20 @@ def problem_active_get(
     **kwargs: Any,
 ) -> str:
     """获取最近的 Zabbix 活跃问题（过滤禁用的 trigger 和 host）。
-    
+
     此工具专门用于获取真正需要关注的活跃问题，自动过滤掉：
     - 禁用的 trigger（status != 0）
     - 禁用的 host（status != 0）
-    
+
     只返回严重程度 >= 2（警告及以上）的问题，并提供 LLM 友好的输出字段：
     - 主机名（host）
     - 告警内容（name, description）
     - 人类可读的时间（time）
     - 严重程度标签（severity_label）
-    
+    - 是否已确认（acknowledged）
+
+    兼容 Zabbix 5 / 6 / 7，使用跨版本稳定的最小参数集发起单次 API 调用。
+
     Args:
         client_manager: ClientManager 实例
         server_name: 目标 Zabbix 服务器名称
@@ -99,10 +102,10 @@ def problem_active_get(
             - limit: 返回结果数量限制（默认 20）
             - sortfield: 排序字段（默认 "eventid"）
             - sortorder: 排序顺序（默认 "DESC"）
-    
+
     Returns:
         包含活跃问题列表的 JSON 字符串
-    
+
     示例:
         当 LLM 需要查看当前的活跃告警时，使用此工具而不是 problem.get，
         因为后者会返回包括已禁用主机和触发器的所有问题。
@@ -110,59 +113,23 @@ def problem_active_get(
     limit = kwargs.get("limit", 20)
     sortfield = kwargs.get("sortfield", "eventid")
     sortorder = kwargs.get("sortorder", "DESC")
-    
-    # 基础参数（不含布尔类型参数，需要兼容 Zabbix 各版本）
-    base_params = {
+
+    # 仅使用 Zabbix 5/6/7 全部版本均支持的稳定参数，避免版本兼容性探测重试。
+    # acknowledged/suppressed/real_time 存在版本差异，不在 API 侧过滤；
+    # acknowledged 字段已包含在 output=extend 的返回结果中，由调用方或展示层处理。
+    params = {
         "output": "extend",
-        "severities": [2, 3, 4, 5],  # 警告及以上
+        "severities": [2, 3, 4, 5],  # 警告及以上，Zabbix 4.x+ 均支持
         "sortfield": sortfield,
         "sortorder": sortorder,
         "limit": limit,
     }
-    
-    # 兼容 Zabbix 各版本布尔参数差异：
-    # - Zabbix 6.4+：acknowledged/suppressed 需要布尔值 (True/False)
-    # - Zabbix 4.x/5.x：acknowledged 需要整数 (0/1)，suppressed 不支持
-    # - real_time：部分版本支持，部分不支持
-    # 逐级降级尝试：先严后松
-    problems = None
-    for ack_val in [False, 0]:  # bool -> int
-        for sup_val in [False, True]:  # 布尔版本
-            for use_real_time in [True, False]:
-                try:
-                    test_params = {
-                        **base_params,
-                        "acknowledged": ack_val,
-                        "suppressed": sup_val,
-                    }
-                    if use_real_time:
-                        test_params["real_time"] = True
-                    problems = client_manager.call(server_name, "problem.get", test_params)
-                    logger.debug(
-                        "problem.get 成功: acknowledged=%s, suppressed=%s, real_time=%s",
-                        ack_val, sup_val, use_real_time
-                    )
-                    break
-                except Exception as e:
-                    logger.debug(
-                        "尝试失败: ack=%s, sup=%s, rt=%s: %s",
-                        ack_val, sup_val, use_real_time, e
-                    )
-                    continue
-            else:
-                continue
-            break
-        else:
-            continue
-        break
-    
-    # 所有方式都失败，用最小参数集（severities 过滤）
-    if problems is None:
-        try:
-            problems = client_manager.call(server_name, "problem.get", base_params)
-        except Exception as e:
-            logger.exception("problem.get 完全失败")
-            return _error_json(f"无法获取问题列表: {e}")
+
+    try:
+        problems = client_manager.call(server_name, "problem.get", params)
+    except Exception as e:
+        logger.exception("problem.get 失败")
+        return _error_json(f"无法获取问题列表: {e}")
     
     if not problems:
         return json.dumps({
