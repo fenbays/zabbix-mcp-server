@@ -470,6 +470,8 @@ var TOOL_DATA = [
      tools: ["settings","housekeeping","authentication","autoregistration","configuration","connector","correlation","hanode","iconmap","image","maintenance","map","module","proxy","proxygroup","regexp","report","task","auditlog"]},
     {name: "extensions", type: "group", desc: "Extras: graph render, anomaly detect, capacity forecast, PDF report generate, action prepare/confirm, raw API call, health check",
      tools: ["graph_render","anomaly_detect","capacity_forecast","report_generate","action_prepare","action_confirm","zabbix_raw_api_call","health_check"]},
+    {name: "views", type: "group", desc: "Problem active get",
+     tools: ["problem_active_get"]},
 ];
 
 var disabledList = (document.getElementById('disabled-tools-input').value || '').split(',').filter(Boolean);
