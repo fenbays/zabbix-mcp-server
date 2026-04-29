@@ -495,9 +495,9 @@ _PROBLEM_GET = MethodDef(
         "'acknowledged' or 'suppressed' to filter by operational state. "
         "The 'recent' flag limits results to problems created in the last "
         "30 minutes."
-        "IMPORTANT: For sorting, use 'sortfield' with supported fields: "
-        "'eventid', 'objectid', or 'name'. The 'clock' field is NOT supported "
-        "for sorting. Use 'eventid' for time-based ordering (event IDs are sequential)."
+        "IMPORTANT: This tool returns problems triggered by ALL triggers and hosts, including those that are currently disabled. That means some returned problems/alerts may no longer be relevant or actionable if their trigger or host is now disabled. "
+        "For standard problem or active alert queries, you should use the problem_active_get tool, which automatically filters out disabled triggers and hosts and only returns current, actionable problems. "
+        "For sorting, use 'sortfield' with supported fields: 'eventid', 'objectid', or 'name'. The 'clock' field is NOT supported for sorting. Use 'eventid' for time-based ordering (event IDs are sequential)."
     ),
     read_only=True,
     compact_fields=("eventid", "name", "severity", "clock", "r_clock"),

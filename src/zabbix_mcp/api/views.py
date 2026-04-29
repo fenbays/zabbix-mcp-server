@@ -111,7 +111,7 @@ def problem_active_get(
         当 LLM 需要查看当前的活跃告警时，使用此工具而不是 problem.get，
         因为后者会返回包括已禁用主机和触发器的所有问题。
     """
-    limit = kwargs.get("limit", 20)
+    limit = kwargs.get("limit", 50)
     sortfield = kwargs.get("sortfield", "eventid")
     sortorder = kwargs.get("sortorder", "DESC")
 
@@ -278,7 +278,7 @@ VIEWS_TOOLS: list[ViewToolDef] = [
             "获取活跃的 Zabbix 问题（仅包含启用的 trigger 和 host）。\n\n"
             "与 problem_get 不同，此工具自动过滤掉禁用的触发器和主机，只返回真正"
             "需要关注的活跃问题（严重程度 >= 警告）。返回的字段包括：主机名、告警内容、"
-            "人类可读的时间、严重程度标签等，特别适合 AI 助手直接呈现给用户。\n\n"
+            "人类可读的时间、严重程度标签等。\n\n"
             "使用场景：\n"
             "- 查看当前需要处理的活跃告警\n"
             "- 生成监控报告或摘要\n"
@@ -286,7 +286,7 @@ VIEWS_TOOLS: list[ViewToolDef] = [
         ),
         handler=problem_active_get,
         params=[
-            ViewParam("limit", "int", "返回结果数量限制（默认 20）", default=20),
+            ViewParam("limit", "int", "返回结果数量限制（默认 50）", default=50),
             ViewParam("sortfield", "str", "排序字段（默认 'eventid'）", default="eventid"),
             ViewParam("sortorder", "str", "排序顺序：'ASC' 或 'DESC'（默认 'DESC'）", default="DESC"),
         ],
