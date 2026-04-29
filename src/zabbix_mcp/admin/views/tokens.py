@@ -72,6 +72,7 @@ _GROUP_DESCRIPTIONS = {
     "users": "Users, user groups, roles, tokens, authentication",
     "administration": "Settings, proxies, housekeeping, audit log, connectors, modules",
     "extensions": "Graph render, anomaly detection, capacity forecast, PDF reports, raw API call, action approval",
+    "views": "Problem active get",
 }
 for _gname, _gtools in TOOL_GROUPS.items():
     _TOOL_DATA.append({

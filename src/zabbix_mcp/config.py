@@ -176,6 +176,9 @@ TOOL_GROUPS: dict[str, list[str]] = {
         "report_generate", "action_prepare", "action_confirm",
         "zabbix_raw_api_call", "health_check",
     ],
+    "views": [
+        "problem_active_get",
+    ],
 }
 
 
