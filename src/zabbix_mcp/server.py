@@ -1501,6 +1501,22 @@ def _register_tools(
         logger.info("PDF reporting disabled (reporting module not found)")
 
     # ------------------------------------------------------------------
+    # Views layer (LLM-friendly data abstractions)
+    # ------------------------------------------------------------------
+    from zabbix_mcp.api.views import VIEWS_TOOLS, make_view_handler
+
+    for view_def in VIEWS_TOOLS:
+        if _ext_allowed(view_def.tool_name):
+            handler = make_view_handler(view_def, client_manager, server_names)
+            mcp.add_tool(
+                handler,
+                name=view_def.tool_name,
+                description=view_def.description,
+                annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+            )
+            count += 1
+
+    # ------------------------------------------------------------------
     # Action approval flow (two-step prepare + confirm)
     # ------------------------------------------------------------------
     # `_pending_actions` is shared across concurrent async handlers. A
