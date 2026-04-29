@@ -27,6 +27,7 @@ import asyncio
 import inspect
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Annotated, Optional
@@ -114,6 +115,12 @@ def problem_active_get(
     sortfield = kwargs.get("sortfield", "eventid")
     sortorder = kwargs.get("sortorder", "DESC")
 
+    t0 = time.monotonic()
+    logger.info(
+        "[problem_active_get] 开始执行 server=%s limit=%s sortfield=%s sortorder=%s",
+        server_name, limit, sortfield, sortorder,
+    )
+
     # 仅使用 Zabbix 5/6/7 全部版本均支持的稳定参数，避免版本兼容性探测重试。
     # acknowledged/suppressed/real_time 存在版本差异，不在 API 侧过滤；
     # acknowledged 字段已包含在 output=extend 的返回结果中，由调用方或展示层处理。
@@ -125,31 +132,48 @@ def problem_active_get(
         "limit": limit,
     }
 
+    logger.info("[problem_active_get] 调用 problem.get，参数: %s", params)
+    t1 = time.monotonic()
     try:
         problems = client_manager.call(server_name, "problem.get", params)
     except Exception as e:
-        logger.exception("problem.get 失败")
+        logger.exception(
+            "[problem_active_get] problem.get 失败 (耗时 %.2fs)", time.monotonic() - t1
+        )
         return _error_json(f"无法获取问题列表: {e}")
-    
+    logger.info(
+        "[problem_active_get] problem.get 完成，返回 %d 条，耗时 %.2fs",
+        len(problems) if problems else 0, time.monotonic() - t1,
+    )
+
     if not problems:
+        logger.info("[problem_active_get] 无活跃问题，总耗时 %.2fs", time.monotonic() - t0)
         return json.dumps({
             "problems": [],
             "count": 0,
             "message": "当前没有活跃问题"
         })
-    
+
     # 收集所有 triggerid（problem 的 objectid 即 triggerid）
     trigger_ids = list(set(str(p["objectid"]) for p in problems if p.get("objectid")))
-    
+    logger.info(
+        "[problem_active_get] 收集到 %d 个唯一 trigger_id（来自 %d 个问题）",
+        len(trigger_ids), len(problems),
+    )
+
     if not trigger_ids:
+        logger.info("[problem_active_get] 无有效 trigger_id，总耗时 %.2fs", time.monotonic() - t0)
         return json.dumps({
             "problems": [],
             "count": 0,
             "message": "没有有效的 trigger ID"
         })
-    
+
     # 批量查询 enabled triggers 及其关联主机
-    # 修正：使用 filter.status=0 过滤启用的 trigger，避免双重过滤逻辑冲突
+    logger.info(
+        "[problem_active_get] 调用 trigger.get，triggerids 数量: %d", len(trigger_ids)
+    )
+    t2 = time.monotonic()
     try:
         triggers = client_manager.call(server_name, "trigger.get", {
             "output": ["triggerid", "description", "priority", "value", "status"],
@@ -160,8 +184,14 @@ def problem_active_get(
             "active": True,           # 仅返回 active 的 trigger
         })
     except Exception as e:
-        logger.exception("trigger.get 失败")
+        logger.exception(
+            "[problem_active_get] trigger.get 失败 (耗时 %.2fs)", time.monotonic() - t2
+        )
         return _error_json(f"无法获取 trigger 信息: {e}")
+    logger.info(
+        "[problem_active_get] trigger.get 完成，返回 %d 条，耗时 %.2fs",
+        len(triggers) if triggers else 0, time.monotonic() - t2,
+    )
     
     # 构建 triggerid -> 主机信息映射（只取第一个 enabled host）
     trigger_host_map: dict[str, str] = {}       # triggerid -> host.name
@@ -205,6 +235,10 @@ def problem_active_get(
             "ack_count": len(p.get("acknowledges", [])),
         })
     
+    logger.info(
+        "[problem_active_get] 完成：filtered=%d filtered_out=%d，总耗时 %.2fs",
+        len(filtered), len(problems) - len(filtered), time.monotonic() - t0,
+    )
     return json.dumps({
         "problems": filtered,
         "count": len(filtered),
